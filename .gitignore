@@ -1,0 +1,5 @@
+/.DS_Store
+/.venv
+/datasets
+/lightning_logs
+/results
