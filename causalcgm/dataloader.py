@@ -45,30 +45,19 @@ def load_dag(dataset):
         return dag_init, to_check, concept_names
     elif dataset == 'celeba':
         dag_init = torch.tensor([[0., 1., 0., 1., 0., 0., 0., 0., 0., 1., 0., 1.],
-            [0., 0., 0., 0., 0., 1., 0., 1., 0., 1., 1., 1.],
-            [0., 1., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 1., 0., 1., 0., 1., 1., 1., 1., 1., 1., 1.],
-            [0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0.],
-            [0., 0., 0., 1., 0., 1., 0., 0., 0., 0., 0., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 1., 1., 0., 0., 1.],
-            [0., 0., 0., 0., 0., 1., 1., 0., 1., 1., 0., 0.]])
+                                [0., 0., 0., 0., 0., 1., 0., 1., 0., 1., 1., 1.],
+                                [0., 1., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                [0., 1., 0., 1., 0., 1., 1., 1., 1., 1., 1., 1.],
+                                [0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0.],
+                                [0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0.],
+                                [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                                [0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0.],
+                                [0., 0., 0., 1., 0., 1., 0., 0., 0., 0., 0., 0.],
+                                [0., 0., 0., 0., 0., 0., 0., 1., 1., 0., 0., 1.],
+                                [0., 0., 0., 0., 0., 1., 1., 0., 1., 1., 0., 0.]])
         to_check = [(2, 0), (4, 0)]
-        concept_names = ['Smiling',
-                        'Attractive',
-                        'Mouth_Slig',
-                        'High_Cheek',
-                        'Wearing_Li',
-                        'Heavy_Make',
-                        'Male',
-                        'Wavy_Hair',
-                        'Big_Lips',
-                        'Oval_Face',
-                        'Makeup',
-                        'Fem_Model']
+        concept_names = ['Smiling', 'Attractive', 'Mouth_Slig', 'High_Cheek', 'Wearing_Li', 'Heavy_Make', 'Male', 'Wavy_Hair', 'Big_Lips', 'Oval_Face', 'Makeup', 'Fem_Model']
         return dag_init, to_check, concept_names
 
 # Directly load embeddings computed with a backbone (e.g. ResNet18)
@@ -106,15 +95,14 @@ def load_preprocessed_data(base_dir='./dataset/dsprites'):
         test_features = torch.from_numpy(np.load(os.path.join(base_dir, 'test_features.npy')))
         test_concepts = torch.from_numpy(np.load(os.path.join(base_dir, 'test_concepts.npy')))
         test_tasks = torch.from_numpy(np.load(os.path.join(base_dir, 'test_tasks.npy'))).unsqueeze(1).float()
-
         if 'celeba' in base_dir:
-            train_features, train_concepts, concept_names, order = preprocess_concept_celeba(train_features, train_concepts, train_tasks)
+            order = [29, -3, 19, 18, 34, 17, -2, 31, 5, 23]
+            train_features, train_concepts, concept_names, _ = preprocess_concept_celeba(train_features, train_concepts, train_tasks, order=order)
             test_features, test_concepts, tmp2, _ = preprocess_concept_celeba(test_features, test_concepts, test_tasks, order=order)
-            train_concepts = train_concepts[:, :-1]
-            test_concepts = test_concepts[:, :-1]
             train_tasks = train_concepts[:, -1].unsqueeze(-1)
             test_tasks = test_concepts[:, -1].unsqueeze(-1)
-
+            train_concepts = train_concepts[:, :-1]
+            test_concepts = test_concepts[:, :-1]
     
     return (train_features, train_concepts, train_tasks, 
             test_features, test_concepts, test_tasks,

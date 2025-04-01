@@ -154,7 +154,7 @@ def compute_pns_matrix(x, model, dag):
     return matrix_pns
 
 # Interventions (do-interventions) starting from root nodes
-def interventions_from_root(dag, model, x, s, order=None, exclude=None):
+def interventions_from_root(dag, model, x, s, order=None, exclude=None, exclude_labels=[], compute_label=False, absolute=False):
     """
     Perform interventions starting from root nodes.
     Args:
@@ -204,14 +204,22 @@ def interventions_from_root(dag, model, x, s, order=None, exclude=None):
     #     concept_accuracy = accuracy_score(s[:, i].ravel(), s_pred[:, i].ravel() > 0.5)
     
     # get the accuracy of the model on the original perturbed data
+    int_idexes = []
     s_pred = model(x_perturbed)
-    concept_accuracy = accuracy_score(s.ravel(), s_pred.ravel() > 0.5)
+    if compute_label:
+        to_include = [s.shape[1]-1]
+    else:
+        to_include = [i for i in range(s.shape[1]) if i not in int_idexes and i not in exclude]
+    if absolute:
+        to_include = [i for i in range(s.shape[1])]
+    concept_accuracy = accuracy_score(s[:, to_include].ravel(), s_pred[:, to_include].ravel() > 0.5)
     acc = []
     abs_acc = [concept_accuracy]
-    int_idexes = []
     if order is None:
         for current_node in order_connections:
             if current_node in exclude:
+                continue
+            elif current_node in exclude_labels:
                 continue
             else:
                 # update the intervention indexes
@@ -221,22 +229,31 @@ def interventions_from_root(dag, model, x, s, order=None, exclude=None):
                 # get the predictions of the model without the intervention
                 s_pred = model(x_perturbed)
                 # get the concepts to include in the accuracy computation (no nodes intervened and no nodes excluded)
-                to_include = [i for i in range(s.shape[1]) if i not in int_idexes and i not in exclude]
+                if compute_label:
+                    to_include = [s.shape[1]-1]
+                else:
+                    to_include = [i for i in range(s.shape[1]) if i not in int_idexes and i not in exclude]
+                if absolute:
+                    to_include = [i for i in range(s.shape[1])]
                 if to_include != []:
                     # get the accuracy of the model without the intervention on the concepts to include
                     concept_accuracy = accuracy_score(s[:, to_include].ravel(), s_pred[:, to_include].ravel() > 0.5)
+                    print(concept_accuracy)
                     # get the accuracy of the model with the intervention on the concepts to include
                     concept_accuracy_int = accuracy_score(s[:, to_include].ravel(), s_pred_int[:, to_include].ravel() > 0.5)
+                    print(concept_accuracy_int)
                     # get the change in accuracy
-                    acc += [concept_accuracy_int- concept_accuracy]
+                    acc += [concept_accuracy_int-concept_accuracy]
                     # get the absolute accuracy
-                    concept_accuracy_abs = accuracy_score(s.ravel(), s_pred_int.ravel() > 0.5)
-                    abs_acc += [concept_accuracy_abs]
+                    # concept_accuracy_abs = accuracy_score(s[:, to_include].ravel(), s_pred_int[:, to_include].ravel() > 0.5)
+                    abs_acc += [concept_accuracy_int]
     else:
         # Used for baseline where the order is random
         for current_node in order:
             if current_node in exclude:
                 continue
+            if current_node in exclude_labels:
+                continue
             else:
                 # update the intervention indexes
                 int_idexes += [current_node]
@@ -245,17 +262,23 @@ def interventions_from_root(dag, model, x, s, order=None, exclude=None):
                 # get the predictions of the model without the intervention
                 s_pred = model(x_perturbed)
                 # get the concepts to include in the accuracy computation (no nodes intervened and no nodes excluded)
-                to_include = [i for i in range(s.shape[1]) if i not in int_idexes and i not in exclude]
+                if compute_label:
+                    to_include = [s.shape[1]-1]
+                else:
+                    to_include = [i for i in range(s.shape[1]) if i not in int_idexes and i not in exclude]
+                if absolute:
+                    to_include = [i for i in range(s.shape[1])]
                 if to_include != []:
                     # get the accuracy of the model without the intervention on the concepts to include
                     concept_accuracy = accuracy_score(s[:, to_include].ravel(), s_pred[:, to_include].ravel() > 0.5)
                     # get the accuracy of the model with the intervention on the concepts to include
                     concept_accuracy_int = accuracy_score(s[:, to_include].ravel(), s_pred_int[:, to_include].ravel() > 0.5)
                     # get the change in accuracy
+                    print(concept_accuracy, concept_accuracy_int)
                     acc += [concept_accuracy_int-concept_accuracy]
                     # get the absolute accuracy
-                    concept_accuracy_abs = accuracy_score(s.ravel(), s_pred_int.ravel() > 0.5)
-                    abs_acc += [concept_accuracy_abs]
+                    # concept_accuracy_abs = accuracy_score(s[:, to_include].ravel(), s_pred_int[:, to_include].ravel() > 0.5)
+                    abs_acc += [concept_accuracy_int]
     return acc, abs_acc
 
 def discover_grasp_dag(s):
@@ -571,6 +594,16 @@ def preprocess_concept_celeba(embeddings, concepts, tasks, order=None):
 
     ranked_labels = torch.cat((ranked_labels, ci1.unsqueeze(1), ci2.unsqueeze(1)), dim=1)
     ranked_label_names = ranked_label_names + [labeli1, labeli2]
+
+    print(ranked_labels.mean(dim=0))
+
+    # ranked_labels = torch.cat([ranked_labels[:, ranked_label_names.index(el)].unsqueeze(1) for el in ranked_label_names if el != 'Attractive'] + 
+    #                           [ranked_labels[:, ranked_label_names.index('Attractive')].unsqueeze(1)], dim=1)
+    # # ranked_labels = torch.cat([ranked_labels, ], dim=1)
+    # print(ranked_labels.mean(dim=0))
+
+    # ranked_label_names = [i for i in ranked_label_names if i != 'Attractive']
+    # ranked_label_names = ranked_label_names + ['Attractive']
 
     ranked_label_names = [ln[:10] for ln in ranked_label_names]
     print(ranked_label_names)

@@ -20,7 +20,7 @@ seed_everything(0)
 
 n_seeds = 5
 embedding_size = 8
-ce_size = 0 # Not used
+ce_size = embedding_size 
 gamma = 1
 
 # ATTENTION WITH THIS: They are correct for the given graphs
@@ -28,8 +28,9 @@ gamma = 1
 index_perturb = {'dsprites': [3], 'checkmark': [1], 'celeba': [2]} # should be all parents of the index block
 index_block = {'dsprites': [1], 'checkmark': [2], 'celeba': [0, 1]} # should be the index of the children of the index perturb and should be an ancestor of the label (last concept in the graph)
 
-datasets = ['dsprites', 'checkmark', 'celeba']
-epochs = {'dsprites': 200, 'checkmark': 350, 'celeba': 30}
+datasets = ['checkmark', 'dsprites', 'celeba']
+epochs = {'dsprites': 200, 'checkmark': 350, 'celeba': 40}
+no_out_task = {'dsprites': True, 'checkmark': True, 'celeba': False}
 
 random_start = False # if True, the model starts with a random DAG, otherwise it starts with a DAG initialized with the conditional entropy between concepts
 
@@ -38,11 +39,14 @@ for dataset in datasets:
     os.makedirs(results_dir, exist_ok=True)
     results = []
     interventions = []
+    interventions_c = []
     explanations = []
+    interventions_y = []
+    interventions_abs = []
     pns_list = []
     for i in range(n_seeds):
-        seed = i + 1
-
+        seed = i
+        seed_everything(seed)
         lambda_cace_2 = 0.0
 
         (x_train, c_train, y_train, 
@@ -79,8 +83,8 @@ for dataset in datasets:
 
         models = {
 
-            'CausalCGM': CausalCGM(x_train.shape[1], embedding_size, n_concepts, n_classes, ce_size, gamma, 0, lambda_cace_2, probabilistic=False),
-            'CausalCGM_given': CausalCGM(x_train.shape[1], embedding_size, n_concepts, n_classes, ce_size, gamma, 0, lambda_cace_2, probabilistic=False),
+            'CausalCGM': CausalCGM(x_train.shape[1], embedding_size, n_concepts, n_classes, ce_size, gamma, 0, lambda_cace_2, probabilistic=False, no_out_task=no_out_task[dataset]),
+            'CausalCGM_given': CausalCGM(x_train.shape[1], embedding_size, n_concepts, n_classes, ce_size, gamma, 0, lambda_cace_2, probabilistic=False, no_out_task=no_out_task[dataset]),
             'CEM': CEM(x_train.shape[1], embedding_size, n_concepts, n_classes, ce_size, tp_size),
             'CBM': CBM(x_train.shape[1], embedding_size, n_concepts, n_classes),
             # 'BB': StandardE2E(x_train.shape[1], n_classes+n_concepts, emb_size=embedding_size),
@@ -88,7 +92,7 @@ for dataset in datasets:
 
         for model_name, model in models.items():
             # checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="val_loss")
-            print(f'Training {model_name} with seed {seed}/{n_seeds}...')
+            print(f'Training {model_name} with seed {seed+1}/{n_seeds}...')
 
             checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="val_concept_accuracy", mode="max", save_weights_only=True)
             if model_name.endswith('given') and dag_init is not None:
@@ -160,8 +164,19 @@ for dataset in datasets:
                 s_pred = model.forward(x_test)
 
                 # interventions
-                acc_int = interventions_from_root(torch.tensor(dag), model, x_test, s_test, exclude=[n_concepts])
+                acc_int = interventions_from_root(torch.tensor(dag), model, x_test, s_test, exclude=[], exclude_labels=[n_symbols-1])
+                acc_int_only_concept = interventions_from_root(torch.tensor(dag), model, x_test, s_test, exclude=[n_symbols-1], exclude_labels=[n_symbols-1])
+                acc_int_abs = interventions_from_root(torch.tensor(dag), model, x_test, s_test, exclude=[], exclude_labels=[n_symbols-1], absolute=True)
+                
+                # Create an order where parents of the label come first, then random order
+                parent_indices = np.where(dag[:n_concepts, -1] > 0.05)[0].tolist()
+                # order parent_indices according to their value in the dag
+                parent_indices = sorted(parent_indices, key=lambda x: dag[x, -1], reverse=True)
+                remaining_indices = [i for i in range(n_concepts) if i not in parent_indices]
+                np.random.shuffle(remaining_indices)
+                order = parent_indices + remaining_indices
 
+                acc_int_only_label = interventions_from_root(torch.tensor(dag), model, x_test, s_test, exclude=[], exclude_labels=[n_symbols-1], order=order, compute_label=True)
                 # PNS
                 PNS = compute_pns_matrix(x_test, model, dag)
 
@@ -170,9 +185,12 @@ for dataset in datasets:
                 s_pred = model.forward(x_test)
 
                 # interventions
-                order = torch.randperm(n_concepts) # random order of concepts
-                acc_int = interventions_from_root(torch.tensor(dag_init), model, x_test, s_test, order, exclude=[n_concepts])
-
+                order = torch.randperm(n_concepts).numpy().tolist() # random order of concepts
+                acc_int = interventions_from_root(torch.tensor(dag_init), model, x_test, s_test, exclude=[], exclude_labels=[n_symbols-1])
+                acc_int_abs = interventions_from_root(torch.tensor(dag_init), model, x_test, s_test, exclude=[], exclude_labels=[n_symbols-1], absolute=True)
+                
+                acc_int_only_concept = interventions_from_root(torch.tensor(dag_init), model, x_test, s_test, exclude=[n_symbols-1], exclude_labels=[n_symbols-1])
+                acc_int_only_label = interventions_from_root(torch.tensor(dag_init), model, x_test, s_test, exclude=[], exclude_labels=[n_symbols-1], compute_label=True)
                 # PNS
                 dag = torch.zeros(n_symbols, n_symbols)
                 dag[:, -1] = 1
@@ -243,6 +261,21 @@ for dataset in datasets:
                 metric_cols = ['acc_int']
                 df = pd.DataFrame(interventions, columns=['dataset', 'model', 'seed'] + metric_cols)
                 df.to_csv(os.path.join(results_dir, 'interventions.csv'), index=False)
+
+                interventions_c.append([f'{dataset}_dataset', model_name, seed, acc_int_only_concept])
+                metric_cols = ['acc_int_only_concept']
+                df = pd.DataFrame(interventions_c, columns=['dataset', 'model', 'seed'] + metric_cols)
+                df.to_csv(os.path.join(results_dir, 'interventions_c.csv'), index=False)
+
+                interventions_y.append([f'{dataset}_dataset', model_name, seed, acc_int_only_label])
+                metric_cols = ['acc_int_only_label']
+                df = pd.DataFrame(interventions_y, columns=['dataset', 'model', 'seed'] + metric_cols)
+                df.to_csv(os.path.join(results_dir, 'interventions_y.csv'), index=False)
+
+                interventions_abs.append([f'{dataset}_dataset', model_name, seed, acc_int_abs])
+                metric_cols = ['acc_int_abs']
+                df = pd.DataFrame(interventions_abs, columns=['dataset', 'model', 'seed'] + metric_cols)
+                df.to_csv(os.path.join(results_dir, 'interventions_abs.csv'), index=False)
 
                 pns_list.append([f'{dataset}_dataset', model_name, seed, PNS])
                 metric_cols = ['PNS']

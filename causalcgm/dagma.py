@@ -12,7 +12,7 @@ class DagmaCE(nn.Module):
     Class that models the structural equations for the causal graph using MLPs.
     """
 
-    def __init__(self, n_concepts: int, n_classes: int, dims: typing.List[int], bias: bool = False, gamma: float = 10.0):
+    def __init__(self, n_concepts: int, n_classes: int, dims: typing.List[int], bias: bool = False, gamma: float = 10.0, no_out_task: bool = True):
         r"""
         Parameters
         ----------
@@ -24,6 +24,8 @@ class DagmaCE(nn.Module):
             Number of neurons in hidden layers of each MLP representing each structural equation.
         bias : bool, optional
             Flag whether to consider bias or not, by default ``True``
+        no_out_task : bool, optional
+            Flag wheter to not allow edges from classes to concepts, by default ``True``
         """
         super(DagmaCE, self).__init__()
         self.n_concepts = n_concepts
@@ -35,7 +37,8 @@ class DagmaCE(nn.Module):
         # remove self loop 
         self.mask = self.mask - self.I
         # remove edges from classes to concepts
-        self.mask[n_concepts:] = torch.zeros(n_classes, self.n_symbols)
+        if no_out_task:
+            self.mask[n_concepts:] = torch.zeros(n_classes, self.n_symbols)
 
         self.edges_to_check = []
         self.edge_matrix = torch.nn.Parameter(torch.zeros(self.n_symbols, self.n_symbols))
@@ -161,7 +164,7 @@ class CausalLayer(DagmaCE):
     Class that models the structural equations for the causal graph using MLPs.
     """
 
-    def __init__(self, n_concepts: int, n_classes: int, dims: typing.List[int], bias: bool = False, gamma: float = 10.0):
+    def __init__(self, n_concepts: int, n_classes: int, dims: typing.List[int], bias: bool = False, gamma: float = 10.0, no_out_task: bool = True):
         r"""
         Parameters
         ----------
@@ -173,8 +176,10 @@ class CausalLayer(DagmaCE):
             Number of neurons in hidden layers of each MLP representing each structural equation.
         bias : bool, optional
             Flag whether to consider bias or not, by default ``True``
+        no_out_task : bool, optional
+            Flag wheter to not allow edges from classes to concepts, by default ``True``
         """
-        super().__init__(n_concepts, n_classes, dims, bias, gamma)
+        super().__init__(n_concepts, n_classes, dims, bias, gamma, no_out_task)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # [n, d] -> [n, d]
         r"""

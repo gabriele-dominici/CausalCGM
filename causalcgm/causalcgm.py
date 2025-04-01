@@ -26,6 +26,7 @@ class CausalConceptGraphLayer(torch.nn.Module):
             n_classes,
             emb_size,
             gamma=10.0,
+            no_out_task=True,
     ):
         """
         Parameters
@@ -50,7 +51,7 @@ class CausalConceptGraphLayer(torch.nn.Module):
 
         self.eq_model = CausalLayer(self.n_concepts, self.n_classes,
                                     [self.emb_size, self.emb_size*2], bias=False,
-                                    gamma=gamma)
+                                    gamma=gamma, no_out_task=no_out_task)
         
         self.concept_context_generators = torch.nn.ModuleList()
         self.concept_prob_predictor = torch.nn.ModuleList()
@@ -378,7 +379,7 @@ class CausalConceptGraphLayer(torch.nn.Module):
 
 
 class CausalCGM(LightningModule):
-    def __init__(self, input_dim, embedding_size, n_concepts, n_classes, ce_size, gamma, lambda_orth=0, lambda_cace=0, probabilistic=False, root_loss_l = 0.1,
+    def __init__(self, input_dim, embedding_size, n_concepts, n_classes, ce_size, gamma, lambda_orth=0, lambda_cace=0, no_out_task=True, probabilistic=False, root_loss_l = 0.1,
                 #  weight=None, family_of_concepts=None
                 ):
         super().__init__()
@@ -391,7 +392,7 @@ class CausalCGM(LightningModule):
             torch.nn.Linear(embedding_size, embedding_size),
         )
         # Causal Concept Graph Model
-        self.concept_embedder = CausalConceptGraphLayer(embedding_size, n_concepts, n_classes, embedding_size, gamma=gamma)
+        self.concept_embedder = CausalConceptGraphLayer(embedding_size, n_concepts, n_classes, embedding_size, gamma=gamma, no_out_task=no_out_task)
 
         # loss function
         self.loss = torch.nn.BCELoss()
